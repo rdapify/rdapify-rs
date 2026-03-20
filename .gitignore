@@ -1,0 +1,47 @@
+# Rust build artifacts
+/target
+**/*.rs.bk
+
+# Coverage
+tarpaulin-report.html
+lcov.info
+cobertura.xml
+*.profraw
+*.profdata
+
+# Python bindings
+bindings/python/.venv/
+bindings/python/target/
+bindings/python/*.egg-info/
+bindings/python/dist/
+bindings/python/*.whl
+bindings/python/*.so
+bindings/python/*.pyd
+__pycache__/
+*.py[cod]
+
+# Node.js bindings
+bindings/nodejs/node_modules/
+bindings/nodejs/*.node
+bindings/nodejs/dist/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Benchmark artefacts
+criterion/
+
+# Fuzzing
+fuzz/target/

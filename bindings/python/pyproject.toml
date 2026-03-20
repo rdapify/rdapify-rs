@@ -1,0 +1,30 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "rdapify"
+version = "0.1.0"
+description = "Unified RDAP client for Python, powered by Rust"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+keywords = ["rdap", "whois", "domain", "ip", "asn", "rust"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Internet :: Name Service (DNS)",
+    "Topic :: System :: Networking",
+]
+
+[project.urls]
+Homepage       = "https://rdapify.com"
+Repository     = "https://github.com/rdapify/rdapify"
+Documentation  = "https://docs.rdapify.com"
+
+[tool.maturin]
+module-name = "rdapify"
+python-source = "python"
+features = []

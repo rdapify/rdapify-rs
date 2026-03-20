@@ -1,0 +1,75 @@
+[package]
+name = "rdapify"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Unified, secure, high-performance RDAP client with built-in SSRF protection and privacy controls"
+license = "MIT"
+repository = "https://github.com/rdapify/rdapify"
+homepage = "https://rdapify.com"
+documentation = "https://docs.rs/rdapify"
+keywords = ["rdap", "whois", "domain", "network", "dns"]
+categories = ["network-programming", "web-programming::http-client"]
+readme = "README.md"
+exclude = ["bindings/", "tests/fixtures/"]
+
+[lib]
+name = "rdapify"
+# rlib = Rust library, cdylib = C-compatible dynamic library for FFI
+crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+name = "rdapify"
+path = "src/bin/rdapify.rs"
+required-features = ["cli"]
+
+[features]
+default = []
+cli = ["dep:clap"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+
+# HTTP client (rustls = pure Rust TLS, no OpenSSL dependency)
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "gzip"], default-features = false }
+
+# Serialization / deserialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling (derive macro for clean error types)
+thiserror = "2"
+
+# IP address parsing & CIDR matching
+ipnetwork = "0.20"
+
+# IDN / Punycode support (RFC 5891)
+idna = "0.5"
+
+# Thread-safe concurrent HashMap for cache
+dashmap = "6"
+
+# Timestamp utilities
+chrono = { version = "0.4", features = ["serde"] }
+
+# URL parsing & validation
+url = "2"
+
+# CLI (optional feature)
+clap = { version = "4", features = ["derive", "color"], optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true

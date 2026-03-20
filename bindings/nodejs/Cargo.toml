@@ -1,0 +1,26 @@
+[package]
+name = "rdapify-node"
+version = "0.1.0"
+edition = "2021"
+description = "Node.js binding for rdapify"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Core library
+rdapify = { path = "../.." }
+
+# napi-rs: generates N-API bindings automatically
+napi       = { version = "2", features = ["async", "napi6"] }
+napi-derive = "2"
+
+# Async runtime (matches tokio in rdapify)
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+# JSON serialization (for passing structs across the FFI boundary)
+serde_json = "1"
+
+[build-dependencies]
+napi-build = "2"

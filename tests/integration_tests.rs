@@ -1,0 +1,475 @@
+//! End-to-end integration tests using a local mock server.
+//!
+//! Each test:
+//! 1. Starts a mock HTTP server (mockito).
+//! 2. Points the client's bootstrap URL to the mock.
+//! 3. Mocks both the bootstrap file and the RDAP endpoint.
+//! 4. Verifies the normalised response.
+//!
+//! No real network calls are made — all tests run offline.
+
+mod common;
+
+use rdapify::http::FetcherConfig;
+use rdapify::security::SsrfConfig;
+use rdapify::{ClientConfig, RdapClient, RdapError};
+
+use std::time::Duration;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Builds a client that:
+/// - uses `bootstrap_base` as the IANA bootstrap base URL
+/// - has SSRF disabled (mock server runs on localhost)
+/// - has a short timeout (tests should be fast)
+/// - has caching disabled (avoids cross-test pollution)
+fn test_client(bootstrap_base: &str) -> RdapClient {
+    RdapClient::with_config(ClientConfig {
+        bootstrap_url: Some(bootstrap_base.to_string()),
+        cache: false,
+        ssrf: SsrfConfig {
+            enabled: false, // mock server is on localhost
+            ..Default::default()
+        },
+        fetcher: FetcherConfig {
+            timeout: Duration::from_secs(5),
+            max_attempts: 1,
+            ..Default::default()
+        },
+    })
+    .expect("test client construction failed")
+}
+
+// ── Domain ────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn domain_query_returns_normalised_response() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    // Bootstrap: "com" → this mock server
+    server
+        .mock("GET", "/dns.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(common::dns_bootstrap_json("com", &format!("{base}/rdap")).to_string())
+        .create_async()
+        .await;
+
+    // RDAP domain endpoint
+    server
+        .mock("GET", "/rdap/domain/example.com")
+        .with_status(200)
+        .with_header("content-type", "application/rdap+json")
+        .with_body(common::domain_rdap_response("example.com").to_string())
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+    let res = client
+        .domain("example.com")
+        .await
+        .expect("domain query failed");
+
+    assert_eq!(res.query, "example.com");
+    assert_eq!(res.ldh_name.as_deref(), Some("example.com"));
+    assert!(
+        !res.nameservers.is_empty(),
+        "nameservers should not be empty"
+    );
+    assert!(
+        res.nameservers.contains(&"ns1.example.com".to_string()),
+        "expected ns1.example.com in nameservers"
+    );
+    assert!(res.registrar.is_some(), "registrar should be present");
+    assert_eq!(
+        res.registrar.as_ref().unwrap().name.as_deref(),
+        Some("Test Registrar Inc.")
+    );
+    assert_eq!(res.expiration_date(), Some("2025-08-13T04:00:00Z"));
+    assert_eq!(res.registration_date(), Some("1995-08-14T04:00:00Z"));
+    assert!(!res.meta.cached, "response should not be cached");
+}
+
+#[tokio::test]
+async fn domain_query_normalises_idn() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    server
+        .mock("GET", "/dns.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(common::dns_bootstrap_json("com", &format!("{base}/rdap")).to_string())
+        .create_async()
+        .await;
+
+    // "пример.com" → idna crate produces "xn--e1afmkfd.com"
+    server
+        .mock("GET", "/rdap/domain/xn--e1afmkfd.com")
+        .with_status(200)
+        .with_header("content-type", "application/rdap+json")
+        .with_body(common::domain_rdap_response("xn--e1afmkfd.com").to_string())
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+    let res = client
+        .domain("пример.com")
+        .await
+        .expect("IDN domain query failed");
+
+    assert_eq!(res.query, "xn--e1afmkfd.com");
+}
+
+#[tokio::test]
+async fn domain_query_no_server_for_tld() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    // Bootstrap returns empty services
+    server
+        .mock("GET", "/dns.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"version":"1.0","publication":"2024-01-01T00:00:00Z","description":"","services":[]}"#)
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+    let err = client.domain("example.xyz").await.unwrap_err();
+
+    assert!(
+        matches!(err, RdapError::NoServerFound { .. }),
+        "expected NoServerFound, got: {err}"
+    );
+}
+
+#[tokio::test]
+async fn domain_query_rdap_server_404() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    server
+        .mock("GET", "/dns.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(common::dns_bootstrap_json("com", &format!("{base}/rdap")).to_string())
+        .create_async()
+        .await;
+
+    server
+        .mock("GET", "/rdap/domain/notfound.com")
+        .with_status(404)
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+    let err = client.domain("notfound.com").await.unwrap_err();
+
+    assert!(
+        matches!(err, RdapError::HttpStatus { status: 404, .. }),
+        "expected HttpStatus(404), got: {err}"
+    );
+}
+
+// ── IP ────────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn ip_query_returns_normalised_response() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    server
+        .mock("GET", "/ipv4.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(common::ipv4_bootstrap_json("8.0.0.0/8", &format!("{base}/rdap")).to_string())
+        .create_async()
+        .await;
+
+    server
+        .mock("GET", "/rdap/ip/8.8.8.8")
+        .with_status(200)
+        .with_header("content-type", "application/rdap+json")
+        .with_body(common::ip_rdap_response("8.8.8.0", "8.8.8.255", "US").to_string())
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+    let res = client.ip("8.8.8.8").await.expect("IP query failed");
+
+    assert_eq!(res.query, "8.8.8.8");
+    assert_eq!(res.start_address.as_deref(), Some("8.8.8.0"));
+    assert_eq!(res.country.as_deref(), Some("US"));
+    assert_eq!(res.ip_version.as_ref(), Some(&rdapify::IpVersion::V4));
+}
+
+#[tokio::test]
+async fn ip_query_rejects_invalid_input() {
+    // No mock needed — validation happens before any network call.
+    let client = RdapClient::new().expect("client construction failed");
+    let err = client.ip("not-an-ip").await.unwrap_err();
+    assert!(
+        matches!(err, RdapError::InvalidInput(_)),
+        "expected InvalidInput, got: {err}"
+    );
+}
+
+// ── ASN ───────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn asn_query_accepts_numeric_string() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    server
+        .mock("GET", "/asn.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(common::asn_bootstrap_json("15169-15169", &format!("{base}/rdap")).to_string())
+        .create_async()
+        .await;
+
+    server
+        .mock("GET", "/rdap/autnum/15169")
+        .with_status(200)
+        .with_header("content-type", "application/rdap+json")
+        .with_body(common::asn_rdap_response(15169, 15169, "GOOGLE").to_string())
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+
+    // Both "15169" and "AS15169" should work
+    let res1 = client.asn("15169").await.expect("ASN numeric query failed");
+    assert_eq!(res1.query, 15169);
+    assert_eq!(res1.name.as_deref(), Some("GOOGLE"));
+    assert_eq!(res1.country.as_deref(), Some("US"));
+}
+
+#[tokio::test]
+async fn asn_query_accepts_as_prefix() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    server
+        .mock("GET", "/asn.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(common::asn_bootstrap_json("15169-15169", &format!("{base}/rdap")).to_string())
+        .create_async()
+        .await;
+
+    server
+        .mock("GET", "/rdap/autnum/15169")
+        .with_status(200)
+        .with_header("content-type", "application/rdap+json")
+        .with_body(common::asn_rdap_response(15169, 15169, "GOOGLE").to_string())
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+    let res = client
+        .asn("AS15169")
+        .await
+        .expect("AS-prefixed query failed");
+    assert_eq!(res.query, 15169);
+}
+
+#[tokio::test]
+async fn asn_query_rejects_invalid_input() {
+    let client = RdapClient::new().expect("client construction failed");
+    let err = client.asn("not-a-number").await.unwrap_err();
+    assert!(matches!(err, RdapError::InvalidInput(_)));
+}
+
+// ── Nameserver ────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn nameserver_query_returns_ip_addresses() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    server
+        .mock("GET", "/dns.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(common::dns_bootstrap_json("com", &format!("{base}/rdap")).to_string())
+        .create_async()
+        .await;
+
+    server
+        .mock("GET", "/rdap/nameserver/ns1.google.com")
+        .with_status(200)
+        .with_header("content-type", "application/rdap+json")
+        .with_body(common::nameserver_rdap_response("ns1.google.com").to_string())
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+    let res = client
+        .nameserver("ns1.google.com")
+        .await
+        .expect("nameserver query failed");
+
+    assert_eq!(res.query, "ns1.google.com");
+    assert_eq!(res.ldh_name.as_deref(), Some("ns1.google.com"));
+    assert!(
+        res.ip_addresses.v4.contains(&"8.8.8.8".to_string()),
+        "expected 8.8.8.8 in IPv4 addresses"
+    );
+    assert!(!res.ip_addresses.v6.is_empty(), "expected IPv6 addresses");
+}
+
+// ── Entity ────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn entity_query_returns_handle_and_roles() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    server
+        .mock("GET", "/rdap/entity/ARIN-HN-1")
+        .with_status(200)
+        .with_header("content-type", "application/rdap+json")
+        .with_body(common::entity_rdap_response("ARIN-HN-1").to_string())
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+    let server_url = format!("{base}/rdap");
+    let res = client
+        .entity("ARIN-HN-1", &server_url)
+        .await
+        .expect("entity query failed");
+
+    assert_eq!(res.query, "ARIN-HN-1");
+    assert_eq!(res.handle.as_deref(), Some("ARIN-HN-1"));
+    assert!(!res.roles.is_empty(), "roles should not be empty");
+}
+
+#[tokio::test]
+async fn entity_query_rejects_empty_handle() {
+    let client = RdapClient::new().expect("client construction failed");
+    let err = client
+        .entity("", "https://rdap.arin.net/registry")
+        .await
+        .unwrap_err();
+    assert!(matches!(err, RdapError::InvalidInput(_)));
+}
+
+#[tokio::test]
+async fn entity_query_rejects_empty_server_url() {
+    let client = RdapClient::new().expect("client construction failed");
+    let err = client.entity("ARIN-HN-1", "").await.unwrap_err();
+    assert!(matches!(err, RdapError::InvalidInput(_)));
+}
+
+// ── SSRF protection ───────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn ssrf_blocks_private_ip_in_entity_server_url() {
+    // Default client has SSRF enabled
+    let client = RdapClient::new().expect("client construction failed");
+
+    let err = client
+        .entity("SOME-HANDLE", "https://192.168.1.1/rdap")
+        .await
+        .unwrap_err();
+
+    assert!(err.is_ssrf_blocked(), "expected SSRF block for private IP");
+}
+
+#[tokio::test]
+async fn ssrf_blocks_http_scheme() {
+    let client = RdapClient::new().expect("client construction failed");
+    let err = client
+        .entity("SOME-HANDLE", "http://rdap.arin.net/registry")
+        .await
+        .unwrap_err();
+    assert!(err.is_ssrf_blocked() || matches!(err, RdapError::InsecureScheme { .. }));
+}
+
+// ── Cache ─────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn cache_serves_second_request_without_network_call() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    // Bootstrap called once
+    let dns_mock = server
+        .mock("GET", "/dns.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(common::dns_bootstrap_json("com", &format!("{base}/rdap")).to_string())
+        .expect(1) // bootstrap fetched once per client lifetime (cached in Bootstrap)
+        .create_async()
+        .await;
+
+    // RDAP endpoint called exactly once
+    let rdap_mock = server
+        .mock("GET", "/rdap/domain/example.com")
+        .with_status(200)
+        .with_header("content-type", "application/rdap+json")
+        .with_body(common::domain_rdap_response("example.com").to_string())
+        .expect(1) // served once — second call comes from cache
+        .create_async()
+        .await;
+
+    // Cache-enabled client
+    let client = RdapClient::with_config(ClientConfig {
+        bootstrap_url: Some(base.clone()),
+        cache: true,
+        ssrf: SsrfConfig {
+            enabled: false,
+            ..Default::default()
+        },
+        fetcher: FetcherConfig {
+            timeout: Duration::from_secs(5),
+            max_attempts: 1,
+            ..Default::default()
+        },
+    })
+    .expect("client construction failed");
+
+    let res1 = client
+        .domain("example.com")
+        .await
+        .expect("first query failed");
+    let res2 = client
+        .domain("example.com")
+        .await
+        .expect("second query failed");
+
+    // First call is not cached, second is
+    assert!(!res1.meta.cached, "first response should not be cached");
+    assert!(res2.meta.cached, "second response should be cached");
+
+    // Verify mock call counts
+    dns_mock.assert_async().await;
+    rdap_mock.assert_async().await;
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn bootstrap_returns_error_on_server_failure() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    server
+        .mock("GET", "/dns.json")
+        .with_status(503)
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+    let err = client.domain("example.com").await.unwrap_err();
+
+    assert!(
+        matches!(err, RdapError::HttpStatus { status: 503, .. }),
+        "expected HttpStatus(503), got: {err}"
+    );
+}
