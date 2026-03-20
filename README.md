@@ -9,6 +9,14 @@ RDAP (Registration Data Access Protocol) is the modern replacement for WHOIS, de
 [![CI](https://github.com/rdapify/rdapify-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/rdapify/rdapify-rs/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+> **rdapify ecosystem**
+> | Library | Language | Package |
+> |---------|----------|---------|
+> | [rdapify-rs](https://github.com/rdapify/rdapify-rs) ← **you are here** | Rust | [`rdapify`](https://crates.io/crates/rdapify) on crates.io |
+> | [RDAPify](https://github.com/rdapify/RDAPify) | TypeScript / Node.js | [`rdapify`](https://www.npmjs.com/package/rdapify) on npm |
+> | [@rdapify/core](https://www.npmjs.com/package/@rdapify/core) | Node.js (Rust native) | [`@rdapify/core`](https://www.npmjs.com/package/@rdapify/core) on npm |
+> | [rdapify](https://pypi.org/project/rdapify/) | Python (Rust native) | [`rdapify`](https://pypi.org/project/rdapify/) on PyPI |
+
 ## Features
 
 - **5 query types** — domain, IP, ASN, nameserver, entity

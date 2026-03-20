@@ -45,7 +45,7 @@ thiserror = "2"
 ipnetwork = "0.20"
 
 # IDN / Punycode support (RFC 5891)
-idna = "0.5"
+idna = "1"
 
 # Thread-safe concurrent HashMap for cache
 dashmap = "6"
