@@ -24,6 +24,9 @@ __pycache__/
 bindings/nodejs/node_modules/
 bindings/nodejs/*.node
 bindings/nodejs/dist/
+bindings/nodejs/target/
+bindings/nodejs/Cargo.lock
+bindings/nodejs/package-lock.json
 
 # Editor / IDE
 .vscode/
