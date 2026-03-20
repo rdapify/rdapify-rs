@@ -6,16 +6,12 @@ description = "Python binding for rdapify"
 license = "MIT"
 
 [lib]
-name = "rdapify"
+name = "rdapify_python"
 crate-type = ["cdylib"]
 
 [dependencies]
 rdapify   = { path = "../.." }
 pyo3      = { version = "0.22", features = ["extension-module", "abi3-py38"] }
-pyo3-asyncio-0-21 = { version = "0.21", features = ["tokio-runtime"], optional = true }
 tokio     = { version = "1", features = ["rt-multi-thread", "macros"] }
 serde_json = "1"
-
-[features]
-default = []
-async = ["dep:pyo3-asyncio-0-21"]
+serde     = { version = "1", features = ["derive"] }

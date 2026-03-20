@@ -1,0 +1,14 @@
+/home/haza/Desktop/rdapify-workspace/rdapify-rust/bindings/nodejs/target/release/deps/serde-1d95b99a57cca189.d: /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/haza/Desktop/rdapify-workspace/rdapify-rust/bindings/nodejs/target/release/build/serde-a463afe2f9a121c6/out/private.rs
+
+/home/haza/Desktop/rdapify-workspace/rdapify-rust/bindings/nodejs/target/release/deps/libserde-1d95b99a57cca189.rlib: /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/haza/Desktop/rdapify-workspace/rdapify-rust/bindings/nodejs/target/release/build/serde-a463afe2f9a121c6/out/private.rs
+
+/home/haza/Desktop/rdapify-workspace/rdapify-rust/bindings/nodejs/target/release/deps/libserde-1d95b99a57cca189.rmeta: /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/haza/Desktop/rdapify-workspace/rdapify-rust/bindings/nodejs/target/release/build/serde-a463afe2f9a121c6/out/private.rs
+
+/home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/home/haza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/home/haza/Desktop/rdapify-workspace/rdapify-rust/bindings/nodejs/target/release/build/serde-a463afe2f9a121c6/out/private.rs:
+
+# env-dep:OUT_DIR=/home/haza/Desktop/rdapify-workspace/rdapify-rust/bindings/nodejs/target/release/build/serde-a463afe2f9a121c6/out

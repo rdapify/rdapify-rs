@@ -13,13 +13,14 @@ crate-type = ["cdylib"]
 rdapify = { path = "../.." }
 
 # napi-rs: generates N-API bindings automatically
-napi       = { version = "2", features = ["async", "napi6"] }
+napi       = { version = "2", features = ["async", "napi6", "serde-json"] }
 napi-derive = "2"
 
 # Async runtime (matches tokio in rdapify)
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 # JSON serialization (for passing structs across the FFI boundary)
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [build-dependencies]

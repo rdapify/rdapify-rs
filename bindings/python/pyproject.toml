@@ -21,10 +21,11 @@ classifiers = [
 
 [project.urls]
 Homepage       = "https://rdapify.com"
-Repository     = "https://github.com/rdapify/rdapify"
+Repository     = "https://github.com/rdapify/rdapify-rs"
 Documentation  = "https://docs.rdapify.com"
 
 [tool.maturin]
 module-name = "rdapify"
-python-source = "python"
+bindings = "pyo3"
+# pure Rust extension — no Python source directory needed
 features = []
