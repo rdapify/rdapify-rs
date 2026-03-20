@@ -6,7 +6,7 @@ RDAP (Registration Data Access Protocol) is the modern replacement for WHOIS, de
 
 [![Crates.io](https://img.shields.io/crates/v/rdapify)](https://crates.io/crates/rdapify)
 [![docs.rs](https://img.shields.io/docsrs/rdapify)](https://docs.rs/rdapify)
-[![CI](https://github.com/rdapify/rdapify/actions/workflows/ci.yml/badge.svg)](https://github.com/rdapify/rdapify/actions/workflows/ci.yml)
+[![CI](https://github.com/rdapify/rdapify-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/rdapify/rdapify-rs/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Features
