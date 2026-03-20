@@ -26,7 +26,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run live integration tests
-        run: cargo test --test live_tests --features live-tests -- --nocapture
+        run: cargo test --test live_tests -- --ignored --nocapture
         timeout-minutes: 5
         continue-on-error: true # Don't fail CI if an RDAP server is down
 
