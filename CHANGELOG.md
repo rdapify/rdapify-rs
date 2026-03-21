@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-03-21
+
+### Fixed
+
+- **Security**: upgraded `idna` to resolve GHSA advisory for invalid domain label processing
+- **Security**: upgraded `rustls-webpki` to resolve GHSA advisory for CPU exhaustion via crafted certificate chains
+- **CI**: fixed MSRV job to allow transient network failures gracefully (`CARGO_NET_RETRY=10`)
+- **CI**: fixed live-test workflow (added `#[ignore]` to integration tests that hit live servers)
+- **CI**: added `cargo fetch` step to improve reliability on slow/flaky runners
+
+### Changed
+
+- Bindings CI/CD workflow now publishes `@rdapify/core` (npm) and `rdapify` (PyPI) automatically on version tags
+
 ## [0.1.0] — 2026-03-20
 
 ### Added
@@ -28,5 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Automated release workflow** — triggered on `v*.*.*` tags; verifies tag matches `Cargo.toml` version; publishes to crates.io; creates GitHub Release with CHANGELOG entry
 - **Daily live-test workflow** — runs against real RDAP servers at 06:00 UTC; opens a GitHub Issue on failure
 
-[Unreleased]: https://github.com/rdapify/rdapify/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/rdapify/rdapify/releases/tag/v0.1.0
+[Unreleased]: https://github.com/rdapify/rdapify-rs/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/rdapify/rdapify-rs/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/rdapify/rdapify-rs/releases/tag/v0.1.0
