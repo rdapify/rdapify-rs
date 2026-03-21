@@ -162,6 +162,52 @@ rdapify entity ARIN-CHA-1 https://rdap.arin.net/registry
 rdapify domain example.com --raw
 ```
 
+## Performance
+
+All figures are measured with `cargo bench` (Criterion) on a Linux x86-64 machine.
+The query benchmarks use a local mock HTTP server (mockito) so results reflect
+pure Rust overhead — no real network latency is included.
+
+### Cache
+
+| Benchmark | Time |
+|-----------|------|
+| Cache hit (DashMap read, fresh TTL) | **~124 ns** |
+| Cache miss (key absent) | **~24 ns** |
+| Cache insert (single write) | **~780 ns** |
+| Cache eviction (insert at max capacity) | **~8.8 µs** |
+| Bulk insert — 100 entries | **~35 µs** |
+| Bulk insert — 1 000 entries | **~444 µs** |
+
+### Query pipeline (mock HTTP server)
+
+| Benchmark | Time | Notes |
+|-----------|------|-------|
+| `domain()` — no cache | **~183 µs** | bootstrap lookup + HTTP fetch + normalise |
+| `domain()` — cache hit | **~2.3 µs** | **~80× faster** than uncached |
+| `ip()` — no cache | **~176 µs** | |
+| `asn()` — no cache | **~176 µs** | |
+
+> Cache brings query latency from **~180 µs → ~2 µs** — an 80× speedup for
+> repeated queries within the TTL window.
+
+### SSRF validation
+
+| Benchmark | Time |
+|-----------|------|
+| Public domain URL (allowed) | **~141 ns** |
+| Public IPv4 URL (allowed) | **~220 ns** |
+| Private IPv4 URL (blocked at RFC-1918) | **~295 ns** |
+| Non-HTTPS scheme (blocked immediately) | **~145 ns** |
+| SSRF disabled (boolean bypass) | **~3 ns** |
+
+Run the benchmarks yourself:
+
+```bash
+cargo bench
+# HTML reports → target/criterion/report/index.html
+```
+
 ## Language Bindings
 
 ### Node.js — `rdapify-nd`
