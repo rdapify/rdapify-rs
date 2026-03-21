@@ -7,10 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-03-21
+
 ### Changed
 
 - **Rename**: Node.js binding renamed from `@rdapify/core` → `rdapify-nd` on npm
 - **Rename**: Python binding renamed from `rdapify` → `rdapify-py` on PyPI; Python import name changed from `rdapify` → `rdapify_py`
+- **Performance**: `rdapify-nd` napi binding now uses a module-level `OnceLock<RdapClient>` singleton — eliminates per-call client construction overhead
+
+### Fixed
+
+- **CI**: fixed duplicate `aarch64-apple-darwin` target in `bindings.yml` napi build matrix (was also listed in `napi.triples.defaults`)
+
+### Documentation
+
+- Added full usage examples for `rdapify-nd` (Node.js) and `rdapify-py` (Python) in README
 
 ## [0.1.1] — 2026-03-21
 
@@ -47,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Automated release workflow** — triggered on `v*.*.*` tags; verifies tag matches `Cargo.toml` version; publishes to crates.io; creates GitHub Release with CHANGELOG entry
 - **Daily live-test workflow** — runs against real RDAP servers at 06:00 UTC; opens a GitHub Issue on failure
 
-[Unreleased]: https://github.com/rdapify/rdapify-rs/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/rdapify/rdapify-rs/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/rdapify/rdapify-rs/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/rdapify/rdapify-rs/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/rdapify/rdapify-rs/releases/tag/v0.1.0

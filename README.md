@@ -162,6 +162,103 @@ rdapify entity ARIN-CHA-1 https://rdap.arin.net/registry
 rdapify domain example.com --raw
 ```
 
+## Language Bindings
+
+### Node.js — `rdapify-nd`
+
+A prebuilt native binding for Node.js. No compiler required — binaries ship for
+Linux x64, macOS x64/arm64, and Windows x64.
+
+```bash
+npm install rdapify-nd
+```
+
+```js
+const { domain, ip, asn, nameserver, entity } = require('rdapify-nd');
+
+// Domain
+const d = await domain('example.com');
+console.log(d.registrar?.name);    // "Example Registrar, Inc."
+console.log(d.ldhName);            // "example.com"
+console.log(d.metadata.timestamp); // "2026-03-21T00:00:00Z"
+
+// IP address
+const i = await ip('8.8.8.8');
+console.log(i.name);    // "GOOGLE"
+console.log(i.country); // "US"
+
+// ASN
+const a = await asn('AS15169');
+console.log(a.name); // "GOOGLE"
+
+// Nameserver
+const ns = await nameserver('ns1.google.com');
+console.log(ns.ipAddresses.v4); // ["216.239.32.10"]
+
+// Entity (requires explicit server URL — no global bootstrap for entities)
+const e = await entity('ARIN-HN-1', 'https://rdap.arin.net/registry');
+console.log(e.handle); // "ARIN-HN-1"
+```
+
+**Use with the TypeScript `rdapify` library** for automatic native acceleration:
+
+```bash
+npm install rdapify rdapify-nd
+```
+
+```ts
+import { RDAPClient } from 'rdapify';
+
+// backend: 'auto' (default) uses rdapify-nd if installed, falls back to TypeScript
+const client = new RDAPClient({ backend: 'auto' });
+
+// Or require it — throws at startup if rdapify-nd is not installed
+const client2 = new RDAPClient({ backend: 'native' });
+
+const result = await client.domain('example.com');
+console.log(result.metadata.source); // RDAP server URL that served the response
+```
+
+---
+
+### Python — `rdapify-py`
+
+A prebuilt native extension for Python 3.8+. Ships as `abi3` wheels for
+Linux x64, macOS x64/arm64, and Windows x64.
+
+```bash
+pip install rdapify-py
+```
+
+```python
+import rdapify_py as rdap
+
+# Domain
+d = rdap.domain("example.com")
+print(d["registrar"]["name"])         # "Example Registrar, Inc."
+print(d["ldhName"])                   # "example.com"
+print(d["meta"]["queried_at"])        # RFC 3339 timestamp
+
+# IP address
+i = rdap.ip("8.8.8.8")
+print(i["name"])     # "GOOGLE"
+print(i["country"])  # "US"
+
+# ASN
+a = rdap.asn("AS15169")
+print(a["name"])  # "GOOGLE"
+
+# Nameserver
+ns = rdap.nameserver("ns1.google.com")
+print(ns["ipAddresses"]["v4"])  # ["216.239.32.10"]
+
+# Entity (requires explicit server URL)
+e = rdap.entity("ARIN-HN-1", "https://rdap.arin.net/registry")
+print(e["handle"])  # "ARIN-HN-1"
+```
+
+All five functions are **synchronous** and backed by a `tokio` runtime under the hood.
+
 ## MSRV
 
 Minimum supported Rust version: **1.75**

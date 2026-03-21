@@ -16,11 +16,22 @@
 
 #![deny(clippy::all)]
 
+use std::sync::OnceLock;
+
 use napi_derive::napi;
 use rdapify::RdapClient;
 
+/// Module-level singleton — constructed once, reused across all JS calls.
+///
+/// `RdapClient` is cheap to clone (all inner state is `Arc`-wrapped), so
+/// cloning for each call is effectively free while keeping the async API
+/// straightforward.
+static CLIENT: OnceLock<RdapClient> = OnceLock::new();
+
 fn get_client() -> napi::Result<RdapClient> {
-    RdapClient::new().map_err(|e| napi::Error::from_reason(e.to_string()))
+    Ok(CLIENT
+        .get_or_init(|| RdapClient::new().expect("failed to initialise RdapClient"))
+        .clone())
 }
 
 /// Query RDAP information for a domain name.
