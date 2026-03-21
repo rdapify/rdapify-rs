@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use serde_json::json;
 
 use rdapify::cache::{CacheConfig, MemoryCache};
@@ -35,9 +35,7 @@ fn bench_cache_miss(c: &mut Criterion) {
 
     c.bench_function("cache_miss", |b| {
         b.iter(|| {
-            criterion::black_box(
-                cache.get("https://rdap.verisign.com/com/v1/domain/notfound.com"),
-            );
+            criterion::black_box(cache.get("https://rdap.verisign.com/com/v1/domain/notfound.com"));
         });
     });
 }
@@ -88,7 +86,10 @@ fn bench_cache_eviction(c: &mut Criterion) {
                 });
                 // Pre-fill to capacity.
                 for i in 0..100 {
-                    cache.set(format!("https://rdap.example.com/domain/key-{i}"), value.clone());
+                    cache.set(
+                        format!("https://rdap.example.com/domain/key-{i}"),
+                        value.clone(),
+                    );
                 }
                 cache
             },

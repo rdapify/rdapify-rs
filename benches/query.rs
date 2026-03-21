@@ -17,7 +17,7 @@
 
 use std::time::Duration;
 
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 use serde_json::json;
 use tokio::runtime::Runtime;
 
@@ -130,7 +130,10 @@ fn make_client(bootstrap_url: &str, cache: bool) -> RdapClient {
     RdapClient::with_config(ClientConfig {
         bootstrap_url: Some(bootstrap_url.to_string()),
         cache,
-        ssrf: SsrfConfig { enabled: false, ..Default::default() },
+        ssrf: SsrfConfig {
+            enabled: false,
+            ..Default::default()
+        },
         fetcher: FetcherConfig {
             timeout: Duration::from_secs(10),
             max_attempts: 1,
@@ -174,9 +177,8 @@ fn bench_domain_no_cache(c: &mut Criterion) {
     });
 
     c.bench_function("domain_no_cache", |b| {
-        b.to_async(&rt).iter(|| async {
-            criterion::black_box(client.domain("example.com").await.unwrap())
-        });
+        b.to_async(&rt)
+            .iter(|| async { criterion::black_box(client.domain("example.com").await.unwrap()) });
     });
 
     drop(server);
@@ -213,9 +215,8 @@ fn bench_domain_cache_hit(c: &mut Criterion) {
     });
 
     c.bench_function("domain_cache_hit", |b| {
-        b.to_async(&rt).iter(|| async {
-            criterion::black_box(client.domain("example.com").await.unwrap())
-        });
+        b.to_async(&rt)
+            .iter(|| async { criterion::black_box(client.domain("example.com").await.unwrap()) });
     });
 
     drop(server);
@@ -251,9 +252,8 @@ fn bench_ip_no_cache(c: &mut Criterion) {
     });
 
     c.bench_function("ip_no_cache", |b| {
-        b.to_async(&rt).iter(|| async {
-            criterion::black_box(client.ip("8.8.8.8").await.unwrap())
-        });
+        b.to_async(&rt)
+            .iter(|| async { criterion::black_box(client.ip("8.8.8.8").await.unwrap()) });
     });
 
     drop(server);
@@ -289,9 +289,8 @@ fn bench_asn_no_cache(c: &mut Criterion) {
     });
 
     c.bench_function("asn_no_cache", |b| {
-        b.to_async(&rt).iter(|| async {
-            criterion::black_box(client.asn("AS15169").await.unwrap())
-        });
+        b.to_async(&rt)
+            .iter(|| async { criterion::black_box(client.asn("AS15169").await.unwrap()) });
     });
 
     drop(server);
