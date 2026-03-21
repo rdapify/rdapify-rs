@@ -1215,7 +1215,7 @@ dependencies = [
 
 [[package]]
 name = "rdapify"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "clap",
@@ -1229,6 +1229,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tokio-test",
  "url",
 ]
@@ -1636,6 +1637,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

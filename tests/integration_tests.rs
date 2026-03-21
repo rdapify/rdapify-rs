@@ -626,6 +626,7 @@ async fn client_with_cache_disabled_does_not_cache() {
         ssrf: SsrfConfig { enabled: false, ..Default::default() },
         fetcher: FetcherConfig { timeout: Duration::from_secs(5), max_attempts: 1, ..Default::default() },
         custom_bootstrap_servers: Default::default(),
+        ..Default::default()
     })
     .expect("client build failed");
 
@@ -671,6 +672,7 @@ async fn client_with_max_attempts_1_does_not_retry() {
             ..Default::default()
         },
         custom_bootstrap_servers: Default::default(),
+        ..Default::default()
     })
     .expect("client build failed");
 
@@ -710,9 +712,176 @@ async fn custom_bootstrap_server_used_without_iana_fetch() {
         ssrf: SsrfConfig { enabled: false, ..Default::default() },
         fetcher: FetcherConfig { timeout: Duration::from_secs(5), max_attempts: 1, ..Default::default() },
         custom_bootstrap_servers: custom,
+        ..Default::default()
     })
     .expect("client build failed");
 
     let res = client.domain("example.com").await.expect("query failed");
     assert_eq!(res.query, "example.com");
+}
+
+// ── Streaming API ─────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn stream_domain_yields_results_for_all_queries() {
+    use rdapify::{DomainEvent, StreamConfig};
+    use tokio_stream::StreamExt;
+
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    // Bootstrap for "com" TLD
+    server
+        .mock("GET", "/dns.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            common::dns_bootstrap_json("com", &format!("{base}/rdap")).to_string(),
+        )
+        .expect_at_least(1)
+        .create_async()
+        .await;
+
+    // RDAP endpoints for two domains
+    for domain in &["example.com", "test.com"] {
+        server
+            .mock("GET", format!("/rdap/domain/{domain}").as_str())
+            .with_status(200)
+            .with_header("content-type", "application/rdap+json")
+            .with_body(common::domain_rdap_response(domain).to_string())
+            .create_async()
+            .await;
+    }
+
+    let client = test_client(&base);
+    let names = vec!["example.com".to_string(), "test.com".to_string()];
+    let mut stream = client.stream_domain(names, StreamConfig::default());
+
+    let mut results: Vec<DomainEvent> = Vec::new();
+    while let Some(event) = stream.next().await {
+        results.push(event);
+    }
+
+    assert_eq!(results.len(), 2);
+    assert!(results.iter().all(|e| matches!(e, DomainEvent::Result(_))));
+}
+
+#[tokio::test]
+async fn stream_domain_isolates_individual_errors() {
+    use rdapify::{DomainEvent, StreamConfig};
+    use tokio_stream::StreamExt;
+
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    server
+        .mock("GET", "/dns.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            common::dns_bootstrap_json("com", &format!("{base}/rdap")).to_string(),
+        )
+        .expect_at_least(1)
+        .create_async()
+        .await;
+
+    // First domain succeeds, second returns 404
+    server
+        .mock("GET", "/rdap/domain/example.com")
+        .with_status(200)
+        .with_header("content-type", "application/rdap+json")
+        .with_body(common::domain_rdap_response("example.com").to_string())
+        .create_async()
+        .await;
+
+    server
+        .mock("GET", "/rdap/domain/notfound.com")
+        .with_status(404)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"errorCode":404,"title":"Not Found"}"#)
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+    let names = vec!["example.com".to_string(), "notfound.com".to_string()];
+    let mut stream = client.stream_domain(names, StreamConfig::default());
+
+    let mut ok_count = 0usize;
+    let mut err_count = 0usize;
+
+    while let Some(event) = stream.next().await {
+        match event {
+            DomainEvent::Result(_) => ok_count += 1,
+            DomainEvent::Error { .. } => err_count += 1,
+        }
+    }
+
+    assert_eq!(ok_count, 1);
+    assert_eq!(err_count, 1);
+}
+
+#[tokio::test]
+async fn stream_domain_cancel_mid_stream_does_not_panic() {
+    use rdapify::{DomainEvent, StreamConfig};
+    use tokio_stream::StreamExt;
+
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    server
+        .mock("GET", "/dns.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            common::dns_bootstrap_json("com", &format!("{base}/rdap")).to_string(),
+        )
+        .expect_at_least(0)
+        .create_async()
+        .await;
+
+    for domain in &["a.com", "b.com", "c.com", "d.com", "e.com"] {
+        server
+            .mock("GET", format!("/rdap/domain/{domain}").as_str())
+            .with_status(200)
+            .with_header("content-type", "application/rdap+json")
+            .with_body(common::domain_rdap_response(domain).to_string())
+            .expect_at_least(0)
+            .create_async()
+            .await;
+    }
+
+    let client = test_client(&base);
+    let names: Vec<String> = vec!["a.com", "b.com", "c.com", "d.com", "e.com"]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+    let mut stream = client.stream_domain(names, StreamConfig::default());
+
+    // Take only the first result then drop the stream — must not panic.
+    let first = stream.next().await;
+    drop(stream);
+
+    // We got something (success or error) — the stream worked
+    assert!(first.is_some());
+}
+
+// ── Connection Pool ───────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn client_config_accepts_connection_pool_settings() {
+    // Structural: verify RdapClient builds with non-default pool settings
+    let client = RdapClient::with_config(ClientConfig {
+        reuse_connections: false,
+        max_connections_per_host: 1,
+        ..Default::default()
+    });
+    assert!(client.is_ok(), "client build should succeed with pool config");
+}
+
+#[tokio::test]
+async fn fetcher_config_reuse_connections_default_is_true() {
+    let config = FetcherConfig::default();
+    assert!(config.reuse_connections);
+    assert_eq!(config.max_connections_per_host, 10);
 }

@@ -51,6 +51,7 @@ pub mod cache;
 pub mod error;
 pub mod http;
 pub mod security;
+pub mod stream;
 pub mod types;
 
 mod client;
@@ -69,3 +70,4 @@ pub use types::{
 pub use cache::{CacheConfig, MemoryCache};
 pub use http::{FetcherConfig, Normalizer};
 pub use security::{SsrfConfig, SsrfGuard};
+pub use stream::{DomainEvent, IpEvent, StreamConfig};

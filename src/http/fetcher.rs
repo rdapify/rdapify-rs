@@ -23,6 +23,12 @@ pub struct FetcherConfig {
     pub initial_backoff: Duration,
     /// Maximum back-off delay cap.
     pub max_backoff: Duration,
+    /// Keep TCP connections alive for reuse.  Enabling this reduces
+    /// per-request latency for high-throughput scenarios.  @default true
+    pub reuse_connections: bool,
+    /// Maximum number of idle keep-alive connections per host.  Only
+    /// meaningful when `reuse_connections` is `true`.  @default 10
+    pub max_connections_per_host: usize,
 }
 
 impl Default for FetcherConfig {
@@ -36,6 +42,8 @@ impl Default for FetcherConfig {
             max_attempts: 3,
             initial_backoff: Duration::from_millis(500),
             max_backoff: Duration::from_secs(8),
+            reuse_connections: true,
+            max_connections_per_host: 10,
         }
     }
 }
@@ -56,6 +64,12 @@ impl Fetcher {
 
     /// Creates a fetcher with a custom configuration.
     pub fn with_config(ssrf: SsrfGuard, config: FetcherConfig) -> Result<Self> {
+        let tcp_keepalive = if config.reuse_connections {
+            Some(Duration::from_secs(60))
+        } else {
+            None
+        };
+
         let client = reqwest::Client::builder()
             .timeout(config.timeout)
             .user_agent(&config.user_agent)
@@ -63,6 +77,9 @@ impl Fetcher {
             .use_rustls_tls()
             // Automatically handle gzip/deflate responses.
             .gzip(true)
+            // Connection pool settings
+            .tcp_keepalive(tcp_keepalive)
+            .pool_max_idle_per_host(config.max_connections_per_host)
             .build()
             .map_err(RdapError::Network)?;
 

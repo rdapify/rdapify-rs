@@ -1,6 +1,6 @@
 [package]
 name = "rdapify"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Unified, secure, high-performance RDAP client with built-in SSRF protection and privacy controls"
@@ -47,6 +47,9 @@ ipnetwork = "0.20"
 # IDN / Punycode support (RFC 5891)
 idna = "1"
 
+# Async streams (streaming API)
+tokio-stream = { version = "0.1", features = ["sync"] }
+
 # Thread-safe concurrent HashMap for cache
 dashmap = "6"
 
@@ -74,6 +77,10 @@ harness = false
 
 [[bench]]
 name = "query"
+harness = false
+
+[[bench]]
+name = "streaming"
 harness = false
 
 [profile.release]

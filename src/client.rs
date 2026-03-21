@@ -31,6 +31,8 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 
 use idna::domain_to_ascii;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::bootstrap::Bootstrap;
 use crate::cache::MemoryCache;
@@ -38,6 +40,7 @@ use crate::error::{RdapError, Result};
 use crate::http::{Fetcher, FetcherConfig, Normalizer};
 use crate::security::{SsrfConfig, SsrfGuard};
 use crate::types::{AsnResponse, AvailabilityResult, DomainResponse, EntityResponse, IpResponse, NameserverResponse};
+pub use crate::stream::{DomainEvent, IpEvent, StreamConfig};
 
 // ── Client configuration ──────────────────────────────────────────────────────
 
@@ -57,6 +60,12 @@ pub struct ClientConfig {
     /// Custom RDAP server overrides per TLD (e.g., `"com" → "https://my-rdap.example.com"`).
     /// These take priority over the IANA bootstrap lookup.
     pub custom_bootstrap_servers: HashMap<String, String>,
+    /// Reuse TCP connections across requests (connection pooling).
+    /// Delegates to `FetcherConfig.reuse_connections`. @default true
+    pub reuse_connections: bool,
+    /// Maximum number of idle keep-alive connections per host.
+    /// Delegates to `FetcherConfig.max_connections_per_host`. @default 10
+    pub max_connections_per_host: usize,
 }
 
 impl Default for ClientConfig {
@@ -67,6 +76,8 @@ impl Default for ClientConfig {
             cache: true,
             bootstrap_url: None,
             custom_bootstrap_servers: HashMap::new(),
+            reuse_connections: true,
+            max_connections_per_host: 10,
         }
     }
 }
@@ -93,7 +104,11 @@ impl RdapClient {
     /// Creates a client with custom configuration.
     pub fn with_config(config: ClientConfig) -> Result<Self> {
         let ssrf = SsrfGuard::with_config(config.ssrf);
-        let fetcher = Fetcher::with_config(ssrf, config.fetcher)?;
+        // Merge top-level connection pool settings into fetcher config
+        let mut fetcher_config = config.fetcher;
+        fetcher_config.reuse_connections = config.reuse_connections;
+        fetcher_config.max_connections_per_host = config.max_connections_per_host;
+        let fetcher = Fetcher::with_config(ssrf, fetcher_config)?;
         let reqwest_client = fetcher.reqwest_client();
 
         let mut bootstrap = match config.bootstrap_url {
@@ -256,6 +271,82 @@ impl RdapClient {
             }),
             Err(e) => Err(e),
         }
+    }
+
+    // ── Streaming API ─────────────────────────────────────────────────────────
+
+    /// Streams RDAP domain results for multiple queries, yielding each result
+    /// as it completes.
+    ///
+    /// # Back-pressure
+    /// Results are buffered in a channel of `config.buffer_size` items.  If
+    /// the consumer falls behind, the producer blocks until there is space.
+    ///
+    /// # Cancellation
+    /// Drop the returned stream to stop all in-flight work (the background
+    /// task detects the closed receiver and exits cleanly).
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// # use rdapify::{RdapClient, stream::{DomainEvent, StreamConfig}};
+    /// # use tokio_stream::StreamExt;
+    /// # #[tokio::main] async fn main() -> rdapify::error::Result<()> {
+    /// let client = RdapClient::new()?;
+    /// let names = vec!["example.com".to_string(), "google.com".to_string()];
+    /// let mut stream = client.stream_domain(names, StreamConfig::default());
+    /// while let Some(event) = stream.next().await {
+    ///     match event {
+    ///         DomainEvent::Result(r)           => println!("Got: {:?}", r.query),
+    ///         DomainEvent::Error { query, .. } => println!("Error for {query}"),
+    ///     }
+    /// }
+    /// # Ok(()) }
+    /// ```
+    pub fn stream_domain(
+        &self,
+        names: Vec<String>,
+        config: StreamConfig,
+    ) -> ReceiverStream<DomainEvent> {
+        let (tx, rx) = mpsc::channel(config.buffer_size);
+        let client = self.clone();
+
+        tokio::spawn(async move {
+            for name in names {
+                let event = match client.domain(&name).await {
+                    Ok(r) => DomainEvent::Result(r),
+                    Err(e) => DomainEvent::Error { query: name, error: e },
+                };
+                if tx.send(event).await.is_err() {
+                    // Receiver was dropped — cancel gracefully.
+                    break;
+                }
+            }
+        });
+
+        ReceiverStream::new(rx)
+    }
+
+    /// Streams RDAP IP results for multiple queries.
+    ///
+    /// See [`stream_domain`](RdapClient::stream_domain) for details on
+    /// back-pressure and cancellation semantics.
+    pub fn stream_ip(&self, addresses: Vec<String>, config: StreamConfig) -> ReceiverStream<IpEvent> {
+        let (tx, rx) = mpsc::channel(config.buffer_size);
+        let client = self.clone();
+
+        tokio::spawn(async move {
+            for addr in addresses {
+                let event = match client.ip(&addr).await {
+                    Ok(r) => IpEvent::Result(r),
+                    Err(e) => IpEvent::Error { query: addr, error: e },
+                };
+                if tx.send(event).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        ReceiverStream::new(rx)
     }
 
     // ── Cache management ──────────────────────────────────────────────────────
