@@ -27,6 +27,7 @@
 //! }
 //! ```
 
+use std::collections::HashMap;
 use std::net::IpAddr;
 
 use idna::domain_to_ascii;
@@ -36,7 +37,7 @@ use crate::cache::MemoryCache;
 use crate::error::{RdapError, Result};
 use crate::http::{Fetcher, FetcherConfig, Normalizer};
 use crate::security::{SsrfConfig, SsrfGuard};
-use crate::types::{AsnResponse, DomainResponse, EntityResponse, IpResponse, NameserverResponse};
+use crate::types::{AsnResponse, AvailabilityResult, DomainResponse, EntityResponse, IpResponse, NameserverResponse};
 
 // ── Client configuration ──────────────────────────────────────────────────────
 
@@ -53,6 +54,9 @@ pub struct ClientConfig {
     pub cache: bool,
     /// Bootstrap base URL (defaults to the official IANA endpoint).
     pub bootstrap_url: Option<String>,
+    /// Custom RDAP server overrides per TLD (e.g., `"com" → "https://my-rdap.example.com"`).
+    /// These take priority over the IANA bootstrap lookup.
+    pub custom_bootstrap_servers: HashMap<String, String>,
 }
 
 impl Default for ClientConfig {
@@ -62,6 +66,7 @@ impl Default for ClientConfig {
             ssrf: SsrfConfig::default(),
             cache: true,
             bootstrap_url: None,
+            custom_bootstrap_servers: HashMap::new(),
         }
     }
 }
@@ -91,10 +96,14 @@ impl RdapClient {
         let fetcher = Fetcher::with_config(ssrf, config.fetcher)?;
         let reqwest_client = fetcher.reqwest_client();
 
-        let bootstrap = match config.bootstrap_url {
+        let mut bootstrap = match config.bootstrap_url {
             Some(url) => Bootstrap::with_base_url(url, reqwest_client),
             None => Bootstrap::new(reqwest_client),
         };
+
+        if !config.custom_bootstrap_servers.is_empty() {
+            bootstrap.set_custom_servers(config.custom_bootstrap_servers);
+        }
 
         let cache = if config.cache {
             Some(MemoryCache::new())
@@ -211,6 +220,42 @@ impl RdapClient {
         let url = format!("{}/entity/{}", server_url.trim_end_matches('/'), handle);
         let (raw, cached) = self.fetch_with_cache(&url).await?;
         self.normalizer.entity(handle, raw, server_url, cached)
+    }
+
+    /// Checks whether a domain is available for registration by analysing the
+    /// RDAP response. Does not use WHOIS.
+    ///
+    /// - Returns `available: true` when the registry returns HTTP 404.
+    /// - Returns `available: false` with `expires_at` (if present) for registered domains.
+    ///
+    /// # Errors
+    /// Propagates any error other than HTTP 404 (e.g., network failures,
+    /// no RDAP server found for the TLD, invalid input).
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// # use rdapify::RdapClient;
+    /// # #[tokio::main] async fn main() -> rdapify::error::Result<()> {
+    /// let client = RdapClient::new()?;
+    /// let res = client.domain_available("example.com").await?;
+    /// println!("Available: {}", res.available);
+    /// # Ok(()) }
+    /// ```
+    pub async fn domain_available(&self, name: &str) -> Result<AvailabilityResult> {
+        let domain_name = normalise_domain(name)?;
+        match self.domain(name).await {
+            Ok(response) => Ok(AvailabilityResult {
+                domain: domain_name,
+                available: false,
+                expires_at: response.expiration_date().map(|s| s.to_string()),
+            }),
+            Err(RdapError::HttpStatus { status: 404, .. }) => Ok(AvailabilityResult {
+                domain: domain_name,
+                available: true,
+                expires_at: None,
+            }),
+            Err(e) => Err(e),
+        }
     }
 
     // ── Cache management ──────────────────────────────────────────────────────

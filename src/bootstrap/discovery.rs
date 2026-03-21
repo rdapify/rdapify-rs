@@ -14,7 +14,7 @@
 //! | ASN        | `/asn.json`                 |
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock as StdRwLock};
 use std::time::{Duration, Instant};
 
 use ipnetwork::IpNetwork;
@@ -61,12 +61,20 @@ pub struct Bootstrap {
     client: reqwest::Client,
     ttl: Duration,
     cache: Arc<RwLock<HashMap<&'static str, CacheEntry>>>,
+    /// Custom TLD → server URL overrides; consulted before IANA lookup.
+    custom_servers: Arc<StdRwLock<HashMap<String, String>>>,
 }
 
 impl Bootstrap {
     /// Creates a new resolver using the official IANA bootstrap endpoint.
     pub fn new(client: reqwest::Client) -> Self {
-        Self::with_base_url("https://data.iana.org/rdap", client)
+        Self {
+            base_url: "https://data.iana.org/rdap".to_string(),
+            client,
+            ttl: Duration::from_secs(86_400),
+            cache: Arc::new(RwLock::new(HashMap::new())),
+            custom_servers: Arc::new(StdRwLock::new(HashMap::new())),
+        }
     }
 
     /// Creates a resolver with a custom base URL (useful for testing).
@@ -76,7 +84,18 @@ impl Bootstrap {
             client,
             ttl: Duration::from_secs(86_400), // 24 hours
             cache: Arc::new(RwLock::new(HashMap::new())),
+            custom_servers: Arc::new(StdRwLock::new(HashMap::new())),
         }
+    }
+
+    /// Registers custom TLD → RDAP server URL overrides.
+    /// These are consulted before the IANA bootstrap lookup.
+    pub fn set_custom_servers(&mut self, servers: HashMap<String, String>) {
+        let mut guard = self.custom_servers.write().expect("lock poisoned");
+        *guard = servers
+            .into_iter()
+            .map(|(k, v)| (k.to_lowercase(), v))
+            .collect();
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -93,11 +112,21 @@ impl Bootstrap {
     /// ```
     pub async fn for_domain(&self, domain: &str) -> Result<String> {
         let tld = extract_tld(domain)?;
+        let tld_lower = tld.to_lowercase();
+
+        // Check custom servers first — no network call needed
+        {
+            let custom = self.custom_servers.read().expect("lock poisoned");
+            if let Some(server) = custom.get(&tld_lower) {
+                return Ok(server.clone());
+            }
+        }
+
         let entries = self.get_entries("dns").await?;
 
         entries
             .iter()
-            .find(|(pattern, _)| pattern.to_lowercase() == tld.to_lowercase())
+            .find(|(pattern, _)| pattern.to_lowercase() == tld_lower)
             .map(|(_, server)| server.clone())
             .ok_or_else(|| RdapError::NoServerFound {
                 query: domain.to_string(),

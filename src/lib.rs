@@ -61,9 +61,9 @@ pub use client::{ClientConfig, RdapClient};
 pub use error::{RdapError, Result};
 
 pub use types::{
-    AsnResponse, DomainResponse, EntityResponse, IpResponse, IpVersion, NameserverIpAddresses,
-    NameserverResponse, RdapEntity, RdapEvent, RdapLink, RdapRemark, RdapRole, RdapStatus,
-    RegistrarSummary, ResponseMeta,
+    AsnResponse, AvailabilityResult, DomainResponse, EntityResponse, IpResponse, IpVersion,
+    NameserverIpAddresses, NameserverResponse, RdapEntity, RdapEvent, RdapLink, RdapRemark,
+    RdapRole, RdapStatus, RegistrarSummary, ResponseMeta,
 };
 
 pub use cache::{CacheConfig, MemoryCache};

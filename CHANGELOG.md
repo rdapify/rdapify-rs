@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] — unreleased
+
+### Added
+
+- **`domain_available()`** — `client.domain_available(name) -> Result<AvailabilityResult>` checks whether a domain is available for registration; returns `available: true` on HTTP 404 from the registry, `available: false` with `expires_at` for registered domains
+- **`AvailabilityResult`** type: `{ domain: String, available: bool, expires_at: Option<String> }` — exported from the public API
+- **`ClientConfig.custom_bootstrap_servers: HashMap<String, String>`** — custom TLD → RDAP server URL overrides, consulted before the IANA bootstrap lookup
+- 11 new integration tests: `domain_available` happy path, 404 → available, error propagation, invalid domain/IP/ASN, cache disabled, max_attempts=1, custom bootstrap server
+
 ## [0.1.2] — 2026-03-21
 
 ### Changed

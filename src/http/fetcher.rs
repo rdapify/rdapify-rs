@@ -163,8 +163,12 @@ fn backoff(attempt: u32, initial: Duration, max: Duration) -> Duration {
 
 #[cfg(test)]
 mod tests {
-    use super::backoff;
+    use super::{backoff, is_retryable, Fetcher, FetcherConfig};
+    use crate::error::RdapError;
+    use crate::security::{SsrfConfig, SsrfGuard};
     use std::time::Duration;
+
+    // ── backoff ───────────────────────────────────────────────────────────────
 
     #[test]
     fn backoff_grows_exponentially() {
@@ -175,7 +179,154 @@ mod tests {
         assert_eq!(backoff(3, base, cap), Duration::from_millis(2000));
         assert_eq!(backoff(4, base, cap), Duration::from_millis(4000));
         assert_eq!(backoff(5, base, cap), Duration::from_millis(8000));
-        // Capped at max
-        assert_eq!(backoff(6, base, cap), Duration::from_secs(8));
+        assert_eq!(backoff(6, base, cap), Duration::from_secs(8)); // capped
+    }
+
+    #[test]
+    fn backoff_saturates_on_very_large_attempt() {
+        // Attempt 64 would overflow u64 — saturating_pow must prevent a panic.
+        let base = Duration::from_millis(1);
+        let cap = Duration::from_secs(30);
+        let result = backoff(64, base, cap);
+        assert_eq!(result, cap); // capped, not panicked
+    }
+
+    #[test]
+    fn backoff_respects_cap_immediately_when_initial_exceeds_max() {
+        let base = Duration::from_secs(10);
+        let cap = Duration::from_secs(5);
+        assert_eq!(backoff(1, base, cap), cap);
+    }
+
+    // ── is_retryable ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn retryable_http_statuses() {
+        for status in [429u16, 500, 502, 503, 504] {
+            let err = RdapError::HttpStatus { status, url: "https://example.com/".to_string() };
+            assert!(is_retryable(&err), "expected {status} to be retryable");
+        }
+    }
+
+    #[test]
+    fn non_retryable_http_statuses() {
+        for status in [400u16, 401, 403, 404, 422] {
+            let err = RdapError::HttpStatus { status, url: "https://example.com/".to_string() };
+            assert!(!is_retryable(&err), "expected {status} to NOT be retryable");
+        }
+    }
+
+    #[test]
+    fn timeout_is_retryable() {
+        let err = RdapError::Timeout { millis: 5000, url: "https://example.com/".to_string() };
+        assert!(is_retryable(&err));
+    }
+
+    #[test]
+    fn input_errors_are_not_retryable() {
+        assert!(!is_retryable(&RdapError::InvalidInput("bad".to_string())));
+        assert!(!is_retryable(&RdapError::SsrfBlocked {
+            url: "http://127.0.0.1/".to_string(),
+            reason: "loopback".to_string(),
+        }));
+        assert!(!is_retryable(&RdapError::ParseError {
+            reason: "invalid JSON".to_string(),
+        }));
+        assert!(!is_retryable(&RdapError::NoServerFound {
+            query: "unknown.tld".to_string(),
+        }));
+    }
+
+    // ── FetcherConfig defaults ────────────────────────────────────────────────
+
+    #[test]
+    fn default_config_values() {
+        let cfg = FetcherConfig::default();
+        assert_eq!(cfg.timeout, Duration::from_secs(10));
+        assert_eq!(cfg.max_attempts, 3);
+        assert_eq!(cfg.initial_backoff, Duration::from_millis(500));
+        assert_eq!(cfg.max_backoff, Duration::from_secs(8));
+        assert!(cfg.user_agent.starts_with("rdapify/"));
+        assert!(cfg.user_agent.contains("rdapify.com"));
+    }
+
+    // ── fetch — SSRF rejection ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn fetch_rejects_ssrf_before_network() {
+        let ssrf = SsrfGuard::new(); // SSRF enabled by default
+        let fetcher = Fetcher::new(ssrf).unwrap();
+        // Private IP — must be blocked before any network call.
+        let err = fetcher.fetch("https://192.168.1.1/rdap").await.unwrap_err();
+        assert!(matches!(err, RdapError::SsrfBlocked { .. }));
+    }
+
+    #[tokio::test]
+    async fn fetch_rejects_http_scheme() {
+        let ssrf = SsrfGuard::new();
+        let fetcher = Fetcher::new(ssrf).unwrap();
+        let err = fetcher.fetch("http://example.com/rdap").await.unwrap_err();
+        assert!(matches!(err, RdapError::InsecureScheme { .. }));
+    }
+
+    // ── fetch — HTTP responses via mockito ────────────────────────────────────
+
+    fn disabled_ssrf_fetcher() -> Fetcher {
+        let ssrf = SsrfGuard::with_config(SsrfConfig { enabled: false, ..Default::default() });
+        Fetcher::with_config(
+            ssrf,
+            FetcherConfig { max_attempts: 1, ..Default::default() },
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn fetch_returns_parsed_json_on_200() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/rdap/domain")
+            .with_status(200)
+            .with_header("content-type", "application/rdap+json")
+            .with_body(r#"{"objectClassName":"domain","ldhName":"EXAMPLE.COM"}"#)
+            .create_async()
+            .await;
+
+        let url = format!("{}/rdap/domain", server.url());
+        let result = disabled_ssrf_fetcher().fetch(&url).await.unwrap();
+        assert_eq!(result["ldhName"], "EXAMPLE.COM");
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_returns_http_status_error_on_404() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/rdap/missing")
+            .with_status(404)
+            .with_body("{}")
+            .create_async()
+            .await;
+
+        let url = format!("{}/rdap/missing", server.url());
+        let err = disabled_ssrf_fetcher().fetch(&url).await.unwrap_err();
+        assert!(matches!(err, RdapError::HttpStatus { status: 404, .. }));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_returns_parse_error_on_non_json_body() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/rdap/bad")
+            .with_status(200)
+            .with_header("content-type", "text/plain")
+            .with_body("not json at all")
+            .create_async()
+            .await;
+
+        let url = format!("{}/rdap/bad", server.url());
+        let err = disabled_ssrf_fetcher().fetch(&url).await.unwrap_err();
+        assert!(matches!(err, RdapError::ParseError { .. }));
+        mock.assert_async().await;
     }
 }
