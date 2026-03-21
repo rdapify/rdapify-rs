@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Rename**: Node.js binding renamed from `@rdapify/core` → `rdapify-nd` on npm
+- **Rename**: Python binding renamed from `rdapify` → `rdapify-py` on PyPI; Python import name changed from `rdapify` → `rdapify_py`
+
 ## [0.1.1] — 2026-03-21
 
 ### Fixed
@@ -19,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bindings CI/CD workflow now publishes `@rdapify/core` (npm) and `rdapify` (PyPI) automatically on version tags
+- Bindings CI/CD workflow now publishes `rdapify-nd` (npm) and `rdapify-py` (PyPI) automatically on version tags
 
 ## [0.1.0] — 2026-03-20
 
@@ -35,8 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`RegistrarSummary`** extracted automatically from domain entity list (name, handle, URL, abuse contact)
 - **`ResponseMeta`** on every response: source URL, queried-at timestamp, cached flag
 - **CLI binary** (`rdapify`) with subcommands `domain`, `ip`, `asn`, `nameserver`, `entity`; `--raw` flag for machine-readable JSON output; enabled via `cli` feature flag
-- **Node.js binding** (`@rdapify/core`) via `napi-rs` — 5 async JS functions, full TypeScript type definitions, multi-platform prebuilt binary support
-- **Python binding** (`rdapify`) via `PyO3` + `maturin` — 5 synchronous Python functions backed by a `tokio` runtime; abi3-py38 wheel for broad Python compatibility
+- **Node.js binding** (`rdapify-nd`) via `napi-rs` — 5 async JS functions, full TypeScript type definitions, multi-platform prebuilt binary support
+- **Python binding** (`rdapify-py`) via `PyO3` + `maturin` — 5 synchronous Python functions backed by a `tokio` runtime; abi3-py38 wheel for broad Python compatibility
 - **43 integration tests** using `mockito` HTTP mock server — happy paths for all 5 query types, 404 / no-server error paths, IDN normalisation, SSRF blocking, cache deduplication
 - **GitHub Actions CI** — multi-platform matrix (Ubuntu, macOS, Windows) + MSRV 1.75 job; lint (`rustfmt` + `clippy -D warnings`); security audit (`cargo-audit`); coverage (`cargo-tarpaulin` → Codecov)
 - **Automated release workflow** — triggered on `v*.*.*` tags; verifies tag matches `Cargo.toml` version; publishes to crates.io; creates GitHub Release with CHANGELOG entry

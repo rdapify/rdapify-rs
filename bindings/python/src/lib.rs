@@ -89,10 +89,10 @@ fn entity(py: Python<'_>, handle: &str, server_url: &str) -> PyResult<Py<PyDict>
     to_py_dict(py, &result)
 }
 
-/// rdapify — Unified RDAP client for Python, powered by Rust.
+/// rdapify_py — Unified RDAP client for Python, powered by Rust.
 #[pymodule]
-#[pyo3(name = "rdapify")]
-fn rdapify_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
+#[pyo3(name = "rdapify_py")]
+fn rdapify_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(domain, m)?)?;
     m.add_function(wrap_pyfunction!(ip, m)?)?;
     m.add_function(wrap_pyfunction!(asn, m)?)?;

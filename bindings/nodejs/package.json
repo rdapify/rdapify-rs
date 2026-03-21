@@ -1,5 +1,5 @@
 {
-  "name": "@rdapify/core",
+  "name": "rdapify-nd",
   "version": "0.1.1",
   "description": "Native Node.js binding for rdapify — powered by Rust",
   "main": "index.js",

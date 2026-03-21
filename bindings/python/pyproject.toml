@@ -3,7 +3,7 @@ requires = ["maturin>=1.7,<2"]
 build-backend = "maturin"
 
 [project]
-name = "rdapify"
+name = "rdapify-py"
 version = "0.1.1"
 description = "Unified RDAP client for Python, powered by Rust"
 readme = "README.md"
@@ -25,7 +25,7 @@ Repository     = "https://github.com/rdapify/rdapify-rs"
 Documentation  = "https://docs.rdapify.com"
 
 [tool.maturin]
-module-name = "rdapify"
+module-name = "rdapify_py"
 bindings = "pyo3"
 # pure Rust extension — no Python source directory needed
 features = []

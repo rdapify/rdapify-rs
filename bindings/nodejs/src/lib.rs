@@ -5,7 +5,7 @@
 //!
 //! # Usage (JavaScript/TypeScript)
 //! ```js
-//! const { domain, ip, asn, nameserver, entity } = require('@rdapify/core');
+//! const { domain, ip, asn, nameserver, entity } = require('rdapify-nd');
 //!
 //! const result = await domain('example.com');
 //! console.log(result.registrar?.name);

@@ -59,7 +59,7 @@ jobs:
           path: bindings/nodejs/*.node
 
   publish-nodejs:
-    name: Publish @rdapify/core to npm
+    name: Publish rdapify-nd to npm
     runs-on: ubuntu-latest
     needs: nodejs
 
