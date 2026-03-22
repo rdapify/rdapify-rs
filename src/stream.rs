@@ -1,6 +1,6 @@
 //! Async streaming API for batch RDAP queries.
 //!
-//! The [`RdapClient::stream_domain`] and [`RdapClient::stream_ip`] methods
+//! The `stream_domain` and `stream_ip` methods on [`crate::RdapClient`]
 //! return [`tokio_stream::wrappers::ReceiverStream`] values that yield events
 //! as results arrive.
 //!
@@ -20,11 +20,11 @@ use crate::types::{DomainResponse, IpResponse};
 
 // ── Events ────────────────────────────────────────────────────────────────────
 
-/// Emitted by [`RdapClient::stream_domain`] for each queried domain.
+/// Emitted by [`crate::RdapClient::stream_domain`] for each queried domain.
 #[derive(Debug)]
 pub enum DomainEvent {
     /// Successful RDAP response for the queried domain.
-    Result(DomainResponse),
+    Result(Box<DomainResponse>),
     /// The query for this domain failed.
     Error {
         /// The domain name that was queried.
@@ -34,11 +34,11 @@ pub enum DomainEvent {
     },
 }
 
-/// Emitted by [`RdapClient::stream_ip`] for each queried IP address.
+/// Emitted by [`crate::RdapClient::stream_ip`] for each queried IP address.
 #[derive(Debug)]
 pub enum IpEvent {
     /// Successful RDAP response for the queried IP.
-    Result(IpResponse),
+    Result(Box<IpResponse>),
     /// The query for this IP address failed.
     Error {
         /// The IP address that was queried.

@@ -570,6 +570,55 @@ async fn domain_available_propagates_non_404_errors() {
     );
 }
 
+// ── domain_available_batch ────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn domain_available_batch_returns_results_for_each_domain() {
+    let mut server = mockito::Server::new_async().await;
+    let base = server.url();
+
+    server
+        .mock("GET", "/dns.json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(common::dns_bootstrap_json("com", &format!("{base}/rdap")).to_string())
+        .create_async()
+        .await;
+
+    // registered.com → 200 (not available)
+    server
+        .mock("GET", "/rdap/domain/registered.com")
+        .with_status(200)
+        .with_header("content-type", "application/rdap+json")
+        .with_body(common::domain_rdap_response("registered.com").to_string())
+        .create_async()
+        .await;
+
+    // free-batch.com → 404 (available)
+    server
+        .mock("GET", "/rdap/domain/free-batch.com")
+        .with_status(404)
+        .with_header("content-type", "application/rdap+json")
+        .with_body(r#"{"errorCode":404,"title":"Not Found"}"#)
+        .create_async()
+        .await;
+
+    let client = test_client(&base);
+    let results = client
+        .domain_available_batch(
+            vec!["registered.com".to_string(), "free-batch.com".to_string()],
+            None,
+        )
+        .await;
+
+    assert_eq!(results.len(), 2);
+    let r0 = results[0].as_ref().expect("registered.com lookup failed");
+    assert!(!r0.available);
+
+    let r1 = results[1].as_ref().expect("free-batch.com lookup failed");
+    assert!(r1.available);
+}
+
 // ── Input validation (client.rs coverage) ────────────────────────────────────
 
 #[tokio::test]

@@ -273,6 +273,61 @@ impl RdapClient {
         }
     }
 
+    /// Checks availability for multiple domains concurrently.
+    ///
+    /// Runs up to `concurrency` queries in parallel (default: 10).
+    /// Each result is independent — a failure for one domain does not affect
+    /// the others. Failed lookups return an `Err` entry in the output vector.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// # use rdapify::RdapClient;
+    /// # #[tokio::main] async fn main() -> rdapify::error::Result<()> {
+    /// let client = RdapClient::new()?;
+    /// let results = client
+    ///     .domain_available_batch(
+    ///         vec!["example.com".to_string(), "test.org".to_string()],
+    ///         None,
+    ///     )
+    ///     .await;
+    /// for res in results {
+    ///     match res {
+    ///         Ok(a)  => println!("{}: available={}", a.domain, a.available),
+    ///         Err(e) => println!("error: {e}"),
+    ///     }
+    /// }
+    /// # Ok(()) }
+    /// ```
+    pub async fn domain_available_batch(
+        &self,
+        names: Vec<String>,
+        concurrency: Option<usize>,
+    ) -> Vec<Result<AvailabilityResult>> {
+        let limit = concurrency.unwrap_or(10).max(1);
+        let mut output: Vec<Option<Result<AvailabilityResult>>> =
+            (0..names.len()).map(|_| None).collect();
+
+        for (chunk_start, chunk) in names.chunks(limit).enumerate() {
+            let base = chunk_start * limit;
+            let mut set = tokio::task::JoinSet::new();
+
+            for (i, name) in chunk.iter().enumerate() {
+                let client = self.clone();
+                let name = name.clone();
+                let idx = base + i;
+                set.spawn(async move { (idx, client.domain_available(&name).await) });
+            }
+
+            while let Some(res) = set.join_next().await {
+                if let Ok((idx, result)) = res {
+                    output[idx] = Some(result);
+                }
+            }
+        }
+
+        output.into_iter().flatten().collect()
+    }
+
     // ── Streaming API ─────────────────────────────────────────────────────────
 
     /// Streams RDAP domain results for multiple queries, yielding each result
@@ -296,7 +351,7 @@ impl RdapClient {
     /// let mut stream = client.stream_domain(names, StreamConfig::default());
     /// while let Some(event) = stream.next().await {
     ///     match event {
-    ///         DomainEvent::Result(r)           => println!("Got: {:?}", r.query),
+    ///         DomainEvent::Result(r)           => println!("Got: {:?}", r.as_ref().query),
     ///         DomainEvent::Error { query, .. } => println!("Error for {query}"),
     ///     }
     /// }
@@ -313,7 +368,7 @@ impl RdapClient {
         tokio::spawn(async move {
             for name in names {
                 let event = match client.domain(&name).await {
-                    Ok(r) => DomainEvent::Result(r),
+                    Ok(r) => DomainEvent::Result(Box::new(r)),
                     Err(e) => DomainEvent::Error { query: name, error: e },
                 };
                 if tx.send(event).await.is_err() {
@@ -337,7 +392,7 @@ impl RdapClient {
         tokio::spawn(async move {
             for addr in addresses {
                 let event = match client.ip(&addr).await {
-                    Ok(r) => IpEvent::Result(r),
+                    Ok(r) => IpEvent::Result(Box::new(r)),
                     Err(e) => IpEvent::Error { query: addr, error: e },
                 };
                 if tx.send(event).await.is_err() {
