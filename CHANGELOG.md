@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — unreleased
+
+### Added
+
+- **Async Streaming API** — `client.stream_domain(names) -> ReceiverStream<DomainEvent>` and `client.stream_ip(addresses) -> ReceiverStream<IpEvent>`; yields results as they arrive without buffering the full batch
+- **Back-pressure** — bounded `tokio::sync::mpsc` channel; `StreamConfig.buffer_size` controls capacity (default 32); senders block when the consumer falls behind — no unbounded memory growth at scale
+- **`DomainEvent` / `IpEvent`** enums — `Ok(DomainResponse)` / `Err(RdapError)` variants; large variants boxed to suppress `clippy::large_enum_variant`
+- **Connection pool config** — `ClientConfig.reuse_connections: bool` (default `true`) and `ClientConfig.max_connections_per_host: usize` (default `10`)
+- **Go binding** (`rdapify-go`) — initial cgo wrapper at `bindings/go/rdapify.go` around the `cdylib` target; exposes 5 synchronous functions (`domain`, `ip`, `asn`, `nameserver`, `entity`) that internally drive a `tokio` runtime; C header `rdapify.h` with full doc comments; CI build-check job added to `.github/workflows/ci.yml`
+- **Streaming benchmark** — `benches/streaming.rs` (Criterion) measuring throughput for `stream_domain` under concurrent load
+
+### Tests
+
+- stream yields all results in order
+- error in one item does not cancel remaining items
+- cancel mid-stream (drop receiver) terminates sender gracefully
+
 ## [0.1.3] — unreleased
 
 ### Added
@@ -67,7 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Automated release workflow** — triggered on `v*.*.*` tags; verifies tag matches `Cargo.toml` version; publishes to crates.io; creates GitHub Release with CHANGELOG entry
 - **Daily live-test workflow** — runs against real RDAP servers at 06:00 UTC; opens a GitHub Issue on failure
 
-[Unreleased]: https://github.com/rdapify/rdapify-rs/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/rdapify/rdapify-rs/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/rdapify/rdapify-rs/compare/v0.1.3...v0.2.0
+[0.1.3]: https://github.com/rdapify/rdapify-rs/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/rdapify/rdapify-rs/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/rdapify/rdapify-rs/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/rdapify/rdapify-rs/releases/tag/v0.1.0

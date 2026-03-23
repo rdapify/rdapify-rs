@@ -32,7 +32,7 @@ RDAP (Registration Data Access Protocol) is the modern replacement for WHOIS, de
 
 ```toml
 [dependencies]
-rdapify = "0.1"
+rdapify = "0.2"
 ```
 
 ## Quick Start
